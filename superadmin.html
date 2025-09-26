@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Superadmin — Readify</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #111;
+    --primary: #22c55e;
+    --text: #e5e5e5;
+    --muted: #666;
+    --danger: #ef4444;
+  }
+  body {
+    font-family: Inter, system-ui, Arial;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 22px;
+  }
+  .wrap {
+    max-width: 1200px;
+    margin: 20px auto;
+    background: var(--panel);
+    padding: 18px;
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  h2,h3 { margin: 0 0 8px }
+  .kpis { display: flex; gap: 16px; margin: 18px 0; }
+  .kpi {
+    flex:1;
+    background: #1a1a1a;
+    padding: 14px;
+    border-radius: 8px;
+    text-align:center;
+  }
+  .kpi .num { font-size: 1.6em; font-weight: 600; color: var(--primary); }
+  table { width:100%; border-collapse: collapse; margin-top:12px; }
+  th,td {
+    padding: 8px;
+    border-bottom: 1px solid #222;
+    text-align: left;
+  }
+  button {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 0;
+    cursor: pointer;
+    background: var(--primary);
+    color: #fff;
+  }
+  .danger { background: var(--danger); }
+  .muted { background: #333; color: var(--text); }
+  .loginBox {
+    display: grid;
+    gap: 10px;
+    max-width: 420px;
+    margin: 80px auto;
+    padding: 20px;
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+  .hidden { display:none }
+  .small { font-size: 13px; color: var(--muted); }
+  input, textarea {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: var(--text);
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<div id="login" class="loginBox">
+  <h2>Superadmin Login</h2>
+  <p class="small">For production, secure with server auth.</p>
+  <input id="superPw" type="password" placeholder="Superadmin password" />
+  <button id="btnSuperLogin">Log in</button>
+</div>
+
+<div id="panel" class="wrap hidden" aria-hidden="true">
+  <header>
+    <h2>📊 Superadmin Dashboard</h2>
+    <div>
+      <button id="btnExportJSON">Export JSON</button>
+      <button id="btnExportCSV">Export CSV</button>
+      <button id="btnLogout" class="muted">Logout</button>
+    </div>
+  </header>
+
+  <!-- KPIs -->
+  <section class="kpis">
+    <div class="kpi"><div class="num" id="kpiTotal">0</div><div>Total Subscribers</div></div>
+    <div class="kpi"><div class="num" id="kpiConsent">0%</div><div>Consent Ratio</div></div>
+    <div class="kpi"><div class="num" id="kpiLatest">–</div><div>Latest Signup</div></div>
+  </section>
+
+  <!-- Charts -->
+  <section style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <canvas id="signupChart"></canvas>
+    <canvas id="consentChart"></canvas>
+  </section>
+
+  <!-- Subscribers Table -->
+  <section>
+    <h3>Subscribers</h3>
+    <table id="subsTable">
+      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Consent</th><th>TS</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Global Notice -->
+  <section style="margin-top:20px">
+    <h3>📌 Global Pinned Notice</h3>
+    <textarea id="noticeText" rows="3" placeholder="Type global announcement..."></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="saveNotice">Save Notice</button>
+      <button id="clearNotice" class="danger">Clear</button>
+    </div>
+    <div class="small" style="margin-top:8px">Current: <span id="noticePreview">(none)</span></div>
+  </section>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const SUPERADMIN_HASH = '9bfab43ce33b32ddf042c310b94a17996d3384789fff2164767cc9ccfbd5116a'; // hash("trevia")
+const STORAGE_KEY = 'readify_subscribers_v1';
+
+/* ===== HELPERS ===== */
+function sha256Hex(str){
+  const enc = new TextEncoder();
+  return crypto.subtle.digest('SHA-256', enc.encode(str)).then(buf=>
+    [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('')
+  );
+}
+function getSubscribers(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch(e){return[]} }
+
+/* ===== LOGIN ===== */
+document.getElementById('btnSuperLogin').addEventListener('click', async ()=>{
+  const pw = document.getElementById('superPw').value||'';
+  const h = await sha256Hex(pw);
+  if(h === SUPERADMIN_HASH){
+    document.getElementById('login').classList.add('hidden');
+    const panel = document.getElementById('panel'); panel.classList.remove('hidden'); panel.removeAttribute('aria-hidden');
+    loadDashboard();
+  } else alert('Wrong password');
+});
+document.getElementById('btnLogout').addEventListener('click', ()=>{
+  document.getElementById('panel').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('superPw').value='';
+});
+
+/* ===== EXPORT ===== */
+document.getElementById('btnExportJSON').addEventListener('click', ()=>{
+  const data = getSubscribers();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='subscribers.json'; a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('btnExportCSV').addEventListener('click', ()=>{
+  const subs = getSubscribers();
+  if(!subs.length){ alert('No subscribers'); return; }
+  const rows = [['id','name','email','consent','ts']];
+  subs.forEach(s=> rows.push([s.id, s.name, s.email||'', s.consent, s.ts]));
+  const csv = rows.map(r=> r.map(c=> '"'+(String(c||'').replace(/"/g,'""'))+'"').join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='subscribers.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+/* ===== NOTICE ===== */
+async function loadNotice(){
+  try{
+    const res = await fetch('/api/getNotice');
+    const data = await res.json();
+    document.getElementById('noticePreview').textContent = data.notice || '(none)';
+    document.getElementById('noticeText').value = data.notice || '';
+  } catch(e){ console.error(e); }
+}
+document.getElementById('saveNotice').addEventListener('click', async ()=>{
+  const v = document.getElementById('noticeText').value||'';
+  await fetch('/api/setNotice', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ notice:v })
+  });
+  loadNotice();
+});
+document.getElementById('clearNotice').addEventListener('click', async ()=>{
+  await fetch('/api/setNotice', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ notice:'' })
+  });
+  loadNotice();
+});
+
+/* ===== DASHBOARD ===== */
+function loadDashboard(){
+  const subs = getSubscribers();
+  // KPIs
+  document.getElementById('kpiTotal').textContent = subs.length;
+  const consentCount = subs.filter(s=>s.consent).length;
+  document.getElementById('kpiConsent').textContent = subs.length? Math.round((consentCount/subs.length)*100)+'%' : '0%';
+  document.getElementById('kpiLatest').textContent = subs.length? (new Date(Math.max(...subs.map(s=>+s.ts)))).toLocaleString() : '–';
+  // Table
+  const tbody = document.querySelector('#subsTable tbody'); tbody.innerHTML='';
+  subs.forEach((s,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td>${s.name}</td><td>${s.email||'<em>none</em>'}</td><td>${s.consent?'yes':'no'}</td><td>${new Date(s.ts).toLocaleString()}</td>`;
+    tbody.appendChild(tr);
+  });
+  // Charts
+  renderCharts(subs);
+  // Notice
+  loadNotice();
+}
+function renderCharts(subs){
+  const ctx1 = document.getElementById('signupChart').getContext('2d');
+  const ctx2 = document.getElementById('consentChart').getContext('2d');
+  const byDay = {};
+  subs.forEach(s=>{
+    const d = new Date(s.ts).toLocaleDateString();
+    byDay[d] = (byDay[d]||0)+1;
+  });
+  new Chart(ctx1,{
+    type:'line',
+    data:{labels:Object.keys(byDay), datasets:[{label:'Signups', data:Object.values(byDay), borderColor:'#22c55e'}]},
+    options:{scales:{y:{beginAtZero:true}}, plugins:{legend:{display:false}}}
+  });
+  const consentYes = subs.filter(s=>s.consent).length;
+  const consentNo = subs.length-consentYes;
+  new Chart(ctx2,{
+    type:'pie',
+    data:{labels:['Consent Yes','Consent No'], datasets:[{data:[consentYes,consentNo], backgroundColor:['#22c55e','#444']}]}
+  });
+}
+</script>
+</body>
+</html>
