@@ -1,165 +1,183 @@
-<!DOCTYP<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sign up — Readify Community</title>
+<title>Curiosity Game — Q&A</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root{ --primary:#ff6b6b; --accent:#ffcc66; --bg: linear-gradient(to top, #87ceeb, #ffffff); --text:#111; }
   *{box-sizing:border-box}
   body{font-family:Inter,system-ui,Arial;background:var(--bg);min-height:100vh;margin:0;display:flex;align-items:flex-start;justify-content:center;padding:28px;}
   .card{width:100%;max-width:760px;background:rgba(255,255,255,0.96);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.08);overflow:hidden;padding:22px;position:relative;}
-  h1{margin:0 0 8px;color:var(--primary)}
+  h1,h2{margin:0 0 12px;color:var(--primary)}
   p.lead{margin:0 0 14px;color:#334;}
-  form{display:grid;gap:12px}
+  form, .question-form{display:grid;gap:12px}
   input[type=text], input[type=email]{padding:12px;border-radius:8px;border:1px solid #ddd;width:100%;}
-  label.small{font-size:13px;color:#555}
-  .row{display:flex;gap:12px}
   .btn{padding:10px 14px;border-radius:10px;border:0;cursor:pointer;font-weight:600}
   .btn-primary{background:var(--primary);color:white}
   .btn-ghost{background:transparent;border:1px solid #eee}
   .meta{font-size:13px;color:#666;margin-top:6px}
   .share{margin-top:12px;display:flex;gap:8px;align-items:center}
-  /* Balloon */
-  #balloon{position:fixed;right:24px;top:90px;width:160px;height:200px;background:radial-gradient(circle at 30% 30%, #ff7f7f, #ff4747);border-radius:50% 50% 50% 48% / 60% 60% 40% 40%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;box-shadow:0 8px 30px rgba(0,0,0,0.12);transform-origin:center;pointer-events:auto;opacity:0;transition:opacity .25s, transform .3s}
-  #string{position:fixed;right:128px;top:260px;width:2px;height:90px;background:#333;display:none}
-  /* tiny toast */
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:28px;background:#111;color:#fff;padding:10px 14px;border-radius:10px;display:none;z-index:999}
   footer{margin-top:14px;font-size:13px;color:#666}
-  @media(max-width:640px){#balloon{display:none};#string{display:none}}
 </style>
 </head>
 <body>
   <div class="card" role="main">
-    <h1>Join the Readify Community</h1>
-    <p class="lead">Enter your name and email — we'll save it with your consent so you can be invited to our venue, get updates and small offers.</p>
 
-    <form id="signupForm" onsubmit="handleSubmit(event)">
-      <input id="name" type="text" placeholder="Your full name" required />
-      <input id="email" type="email" placeholder="Your email — we will ask consent" required />
-      <label class="small"><input id="consent" type="checkbox" /> I agree to receive marketing updates (email)</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary" type="submit">Join & Show Balloon</button>
-        <button type="button" class="btn btn-ghost" onclick="goToCommunity()">Go to Community</button>
-        <div style="flex:1"></div>
-        <a href="admin.html" style="font-size:13px;color:#666;text-decoration:none">Admin</a>
+    <!-- Host signup -->
+    <div id="hostBox">
+      <h1>Create Your Curiosity Link</h1>
+      <p class="lead">Enter your name to generate a sharable link. Friends who click it will get a random funny/curious question about you!</p>
+      <form id="signupForm" onsubmit="handleSignup(event)">
+        <input id="hostName" type="text" placeholder="Your name (e.g. Alice)" required />
+        <button class="btn btn-primary" type="submit">Generate Link</button>
+      </form>
+      <div class="share" id="shareBox" style="display:none">
+        <div style="font-size:13px;color:#444">Share this link:</div>
+        <input id="shareUrl" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd" readonly />
+        <button class="btn" onclick="copyShare()">Copy</button>
       </div>
-    </form>
-
-    <div class="meta">After signing we'll store your name & email <strong>locally</strong> (only with consent). For production move storage to your server / CRM.</div>
-
-    <div class="share" id="shareBox" style="display:none">
-      <div style="font-size:13px;color:#444">Share this link:</div>
-      <input id="shareUrl" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd" readonly />
-      <button class="btn" onclick="copyShare()">Copy</button>
     </div>
 
-    <footer>Need help? DM me — this prototype saves to your browser only.</footer>
-  </div>
+    <!-- Visitor question -->
+    <div id="questionBox" style="display:none">
+      <h2 id="questionTitle"></h2>
+      <form class="question-form" onsubmit="submitAnswer(event)">
+        <input id="answerInput" type="text" placeholder="Type your answer..." required />
+        <button class="btn btn-primary" type="submit">Send Answer</button>
+      </form>
+    </div>
 
-  <!-- Balloon -->
-  <div id="balloon" role="img" aria-hidden="false"><span id="balloon-name"></span></div>
-  <div id="string"></div>
+    <footer>Prototype — answers stored locally in your browser.</footer>
+  </div>
 
   <div class="toast" id="toast"></div>
 
 <script>
-/* =============== localStorage helpers =============== */
-const STORAGE_KEY = 'readify_subscribers_v1';
-function getSubscribers(){
-  try{return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')}
-  catch(e){return []}
+/* ================== Question Engine ================== */
+const questionBank = {
+  curiosity: [
+    "What’s one secret {host} would never confess?",
+    "What rumor about {host} did you once hear?",
+    "If you could open {host}'s diary, what would shock you most?"
+  ],
+  humor: [
+    "If {host} got arrested, what would it be for?",
+    "What’s the most embarrassing thing {host} has ever done?",
+    "If {host} were a meme template, which one?"
+  ],
+  memory: [
+    "What’s the first memory you have with {host}?",
+    "What’s a crazy story you and {host} share?",
+    "What’s the funniest trip or hangout with {host}?"
+  ],
+  ego: [
+    "What’s the best compliment you’d give {host}?",
+    "What talent of {host} do you secretly admire?",
+    "What makes {host} unforgettable?"
+  ],
+  challenge: [
+    "If {host} gave you $50, what dare would you give them?",
+    "What challenge should {host} try for 24 hours?",
+    "If {host} had to prank someone, who should it be?"
+  ],
+  future: [
+    "If {host} became famous, what would it be for?",
+    "Where do you see {host} in 10 years?",
+    "If {host} started a business, what would they sell?"
+  ],
+  relationship: [
+    "Who do you think {host} had their first crush on?",
+    "Would you set up {host} on a blind date?",
+    "What type of partner fits {host} best?"
+  ],
+  mystery: [
+    "If {host} had a secret life, what would it be?",
+    "What do you think {host} dreams about?",
+    "What’s one thing {host} hides really well?"
+  ]
+};
+
+const emojiPool = ["😂","👀","🔥","✨","😅","🤯","💡","❤️","🎭","🥳"];
+
+function pickSmartQuestion(host){
+  const categories = [
+    { type: "curiosity", weight: 0.2 },
+    { type: "humor", weight: 0.15 },
+    { type: "memory", weight: 0.15 },
+    { type: "ego", weight: 0.1 },
+    { type: "challenge", weight: 0.1 },
+    { type: "future", weight: 0.1 },
+    { type: "relationship", weight: 0.1 },
+    { type: "mystery", weight: 0.1 }
+  ];
+  let r = Math.random();
+  let chosenCat = categories.find(c => (r -= c.weight) < 0).type;
+  const qs = questionBank[chosenCat];
+  const q = qs[Math.floor(Math.random() * qs.length)];
+  const em = emojiPool[Math.floor(Math.random() * emojiPool.length)];
+  return q.replace(/{host}/g, host) + " " + em;
 }
-function saveSubscribers(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) }
 
-/* =============== submit form flow =============== */
-function validateEmail(email){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) }
-
+/* ================== Helpers ================== */
 function showToast(msg, timeout=2200){
-  const t = document.getElementById('toast'); t.textContent = msg; t.style.display='block';
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display='block';
   setTimeout(()=> t.style.display='none', timeout);
 }
+function getQueryParam(name){
+  const u = new URL(window.location.href);
+  return u.searchParams.get(name);
+}
+function copyShare(){
+  const input = document.getElementById('shareUrl');
+  input.select();
+  document.execCommand('copy');
+  showToast('Copied to clipboard!');
+}
 
-function handleSubmit(e){
+/* ================== Host Flow ================== */
+function handleSignup(e){
   e.preventDefault();
-  const name = document.getElementById('name').value.trim();
-  const email = document.getElementById('email').value.trim().toLowerCase();
-  const consent = document.getElementById('consent').checked;
-
-  if(!name){ alert('Please enter a name'); return }
-  if(!validateEmail(email)){ alert('Please enter a valid email'); return }
-  if(!consent){ if(!confirm('You did not give consent. We will still add your name locally but not email. Continue?')) return }
-
-  // create record
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2,8);
-  const rec = { id, name, email: consent ? email : null, consent: !!consent, ts: new Date().toISOString() };
-
-  // store in localStorage
-  const subs = getSubscribers();
-  subs.push(rec);
-  saveSubscribers(subs);
-
-  // assign seat index (optional)
-  // we keep seat = index +1
-  // update shareable link
-  const url = buildShareUrl(name);
+  const hostName = document.getElementById('hostName').value.trim();
+  if(!hostName){ alert('Enter your name'); return }
+  const url = window.location.origin + window.location.pathname + '?host=' + encodeURIComponent(hostName);
   document.getElementById('shareUrl').value = url;
   document.getElementById('shareBox').style.display='flex';
-
-  // show balloon
-  showBalloon(name);
-
-  showToast('Thanks! You are added locally (consent: ' + (consent ? 'yes' : 'no') + '). Share the link now.');
-  document.getElementById('signupForm').reset();
+  showToast('Link ready — share on WhatsApp!');
 }
 
-function buildShareUrl(name){
-  const safe = encodeURIComponent(name);
-  return window.location.origin + window.location.pathname + '?name=' + safe;
+/* ================== Visitor Flow ================== */
+function submitAnswer(e){
+  e.preventDefault();
+  const ans = document.getElementById('answerInput').value.trim();
+  if(!ans){ alert('Please enter an answer'); return }
+  const host = getQueryParam('host');
+  const rec = {
+    id: 'ans-'+Date.now().toString(36),
+    host,
+    answer: ans,
+    ts: new Date().toISOString()
+  };
+  const answers = JSON.parse(localStorage.getItem('answers_v1') || '[]');
+  answers.push(rec);
+  localStorage.setItem('answers_v1', JSON.stringify(answers));
+  showToast('Thanks! Your answer was recorded.');
+  document.getElementById('answerInput').value='';
 }
 
-/* =============== sharing / balloon display =============== */
-function copyShare(){
-  const input = document.getElementById('shareUrl'); input.select(); document.execCommand('copy'); showToast('Copied to clipboard');
-}
-function showBalloon(name){
-  const b = document.getElementById('balloon'), s = document.getElementById('string'), span = document.getElementById('balloon-name');
-  span.textContent = name;
-  b.style.opacity = '1'; b.style.transform = 'translateY(0) scale(1)';
-  b.style.display='block'; s.style.display='block';
-  // subtle swing
-  b.style.transform = 'translateY(0) rotate(-6deg)';
-  setTimeout(()=> b.style.transform = 'translateY(-6px) rotate(6deg)', 250);
-  // auto float-away after 6s
-  setTimeout(()=> {
-    b.style.transition = 'all 1.8s ease-in';
-    b.style.transform = 'translateY(-220px) scale(.9)';
-    b.style.opacity = '0';
-    s.style.display = 'none';
-    setTimeout(()=> { b.style.display='none'; b.style.transition=''; b.style.transform=''; }, 1800);
-  }, 4000);
-}
-
-/* =============== read ?name= query to auto show balloon =============== */
-function getQueryParam(name){
-  const u = new URL(window.location.href); return u.searchParams.get(name);
-}
-
+/* ================== On Load ================== */
 window.addEventListener('load', ()=>{
-  const nameFromURL = getQueryParam('name');
-  if(nameFromURL){
-    // show balloon and store a "visitor" (no email)
-    showBalloon(nameFromURL);
-    // optional: store anonymous visitor in localStorage for analytics (no email)
-    const subs = getSubscribers();
-    const rec = { id: 'share-'+Date.now().toString(36), name: decodeURIComponent(nameFromURL), email:null, consent:false, ts:new Date().toISOString() };
-    subs.push(rec); saveSubscribers(subs);
+  const host = getQueryParam('host');
+  if(host){
+    document.getElementById('hostBox').style.display='none';
+    document.getElementById('questionBox').style.display='block';
+    document.getElementById('questionTitle').textContent = pickSmartQuestion(decodeURIComponent(host));
   }
 });
-
-/* =============== extras =============== */
-function goToCommunity(){ window.location.href = 'community.html' }
 </script>
 </body>
-</html>
+                                                                 </html>
