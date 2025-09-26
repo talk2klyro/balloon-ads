@@ -8,10 +8,10 @@
 
 <style>
   :root {
-    --primary: #00ff66;        /* Neon green */
-    --accent: #00cc44;         /* Darker green for depth */
-    --bg: #000;                /* Pure black background */
-    --text: #e6ffe6;           /* Soft greenish white text */
+    --primary: #00ff66;
+    --accent: #00cc44;
+    --bg: #000;
+    --text: #e6ffe6;
   }
 
   * { box-sizing: border-box; }
@@ -26,6 +26,15 @@
     align-items: flex-start;
     justify-content: center;
     padding: 28px;
+    overflow: hidden; /* hide scrollbars from canvas */
+  }
+
+  /* Matrix background canvas */
+  #matrix {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 0;
   }
 
   .card {
@@ -37,6 +46,7 @@
     overflow: hidden;
     padding: 24px;
     position: relative;
+    z-index: 1; /* stay above matrix */
     animation: cardGlow 4s ease-in-out infinite alternate;
   }
 
@@ -76,7 +86,7 @@
     color: var(--text);
     outline: none;
     transition: box-shadow 0.2s;
-    caret-color: var(--primary); /* neon caret */
+    caret-color: var(--primary);
   }
   input:focus {
     box-shadow: 0 0 12px var(--primary);
@@ -164,6 +174,9 @@
 </head>
 
 <body>
+  <!-- Matrix background -->
+  <canvas id="matrix"></canvas>
+
   <div class="card" role="main">
 
     <!-- Host signup -->
@@ -196,6 +209,41 @@
   <div class="toast" id="toast"></div>
 
 <script>
+/* ================== Matrix Background ================== */
+const canvas = document.getElementById("matrix");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+const letters = "アァイィウヴエェオカガキギクグケゲコゴサザシジスズセゼソゾタダチッヂツヅテデトドナニヌネノハバヒビフブヘベホボマミムメモヤユヨラリルレロワヰヱヲンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const fontSize = 16;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function drawMatrix() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#0f0";
+  ctx.font = fontSize + "px monospace";
+
+  for (let i = 0; i < drops.length; i++) {
+    const text = letters.charAt(Math.floor(Math.random() * letters.length));
+    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+      drops[i] = 0;
+    }
+    drops[i]++;
+  }
+}
+setInterval(drawMatrix, 50);
+
 /* ================== Question Engine ================== */
 const questionBank = {
   curiosity: [
