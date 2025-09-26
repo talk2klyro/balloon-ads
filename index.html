@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Curiosity Game — Q&A</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --primary: #00ff66;
+    --accent: #00cc44;
+    --bg: #000;
+    --text: #e6ffe6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: Inter, system-ui, Arial;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 28px;
+    overflow: hidden;
+  }
+
+  /* Matrix background canvas */
+  #matrix {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 0;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 760px;
+    background: rgba(0, 30, 0, 0.88);
+    border-radius: 20px;
+    box-shadow: 0 0 25px rgba(0, 255, 102, 0.4);
+    overflow: hidden;
+    padding: 22px;
+    position: relative;
+    z-index: 1;
+    animation: cardGlow 4s ease-in-out infinite alternate;
+  }
+
+  @keyframes cardGlow {
+    from { box-shadow: 0 0 15px rgba(0, 255, 102, 0.3); }
+    to   { box-shadow: 0 0 35px rgba(0, 255, 102, 0.8); }
+  }
+
+  h1,h2 { 
+    margin: 0 0 12px; 
+    color: var(--primary); 
+    text-shadow: 0 0 10px rgba(0,255,102,0.9); 
+  }
+  p.lead { margin: 0 0 14px; color: #aaffaa; }
+
+  form,.question-form{display:grid;gap:12px}
+
+  input[type=text], input[type=email] {
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--primary);
+    background: #000;
+    color: var(--text);
+    outline: none;
+    transition: box-shadow .2s;
+    caret-color: var(--primary);
+  }
+  input:focus { box-shadow: 0 0 12px var(--primary); }
+
+  .btn {
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 0;
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.2s;
+    animation: btnPulse 3s infinite alternate;
+  }
+  @keyframes btnPulse {
+    from { box-shadow: 0 0 6px rgba(0,255,102,0.4); }
+    to   { box-shadow: 0 0 16px rgba(0,255,102,0.9); }
+  }
+  .btn-primary {
+    background: var(--primary); color: #000;
+  }
+  .btn-primary:hover { background: var(--accent); transform: scale(1.05); }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+  }
+
+  .share { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+  .share input {
+    background: #000;
+    border: 1px solid var(--primary);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px;
+    flex: 1;
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    bottom: 28px;
+    background: var(--primary);
+    color: #000;
+    padding: 12px 18px;
+    border-radius: 20px;
+    display: none;
+    z-index: 999;
+    font-weight: 600;
+  }
+
+  footer { margin-top: 14px; font-size: 13px; color: #77ff77; text-align: center; }
+
+  /* Modal */
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal {
+    background: #001500;
+    border: 1px solid var(--primary);
+    border-radius: 16px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: var(--text);
+    box-shadow: 0 0 25px rgba(0,255,102,0.6);
+  }
+  .modal h3 { margin-top: 0; color: var(--primary); }
+  .answer-item { padding: 8px 0; border-bottom: 1px solid #044; }
+  .answer-item:last-child{ border-bottom:none }
+</style>
+</head>
+
+<body>
+  <!-- Matrix background -->
+  <canvas id="matrix"></canvas>
+
+  <div class="card" role="main">
+
+    <!-- Host signup -->
+    <div id="hostBox">
+      <h1>Create Your Curiosity Link</h1>
+      <p class="lead">Enter your name to generate a sharable link. Friends who click it will get a random funny/curious question about you!</p>
+      <form id="signupForm" onsubmit="handleSignup(event)">
+        <input id="hostName" type="text" placeholder="Your name (e.g. Alice)" required />
+        <button class="btn btn-primary" type="submit">Generate Link</button>
+      </form>
+      <div class="share" id="shareBox" style="display:none">
+        <input id="shareUrl" readonly />
+        <button class="btn btn-ghost" onclick="copyShare()">Copy</button>
+      </div>
+      <div style="margin-top:12px;display:none" id="viewAnswersBox">
+        <button class="btn btn-ghost" onclick="openAnswers()">📖 View Answers</button>
+      </div>
+    </div>
+
+    <!-- Visitor question -->
+    <div id="questionBox" style="display:none">
+      <h2 id="questionTitle"></h2>
+      <form class="question-form" onsubmit="submitAnswer(event)">
+        <input id="answerInput" type="text" placeholder="Type your answer..." required />
+        <button class="btn btn-primary" type="submit">Send Answer</button>
+      </form>
+    </div>
+
+    <footer>Prototype — answers stored locally in your browser.</footer>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal">
+      <h3>Answers for <span id="modalHost"></span></h3>
+      <div id="answersList"></div>
+      <div style="margin-top:12px;text-align:right">
+        <button class="btn btn-primary" onclick="closeAnswers()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+/* =========== Matrix Background =========== */
+const canvas = document.getElementById("matrix");
+const ctx = canvas.getContext("2d");
+function resizeCanvas(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+resizeCanvas(); addEventListener("resize", resizeCanvas);
+const letters = "アァイィウヴエェオカガキギクグケゲコゴサザシジスズセゼソゾABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const fontSize = 16, columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+function drawMatrix(){
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#0f0";
+  ctx.font = fontSize+"px monospace";
+  for(let i=0;i<drops.length;i++){
+    const text = letters.charAt(Math.floor(Math.random()*letters.length));
+    ctx.fillText(text,i*fontSize,drops[i]*fontSize);
+    if(drops[i]*fontSize>canvas.height && Math.random()>0.975) drops[i]=0;
+    drops[i]++;
+  }
+}
+setInterval(drawMatrix,50);
+
+/* =========== Question Engine =========== */
+const questionBank = {
+  curiosity: ["What’s one secret {host} would never confess?","What rumor about {host} did you once hear?","If you could open {host}'s diary, what would shock you most?"],
+  humor: ["If {host} got arrested, what would it be for?","What’s the most embarrassing thing {host} has ever done?","If {host} were a meme template, which one?"],
+  memory: ["What’s the first memory you have with {host}?","What’s a crazy story you and {host} share?","What’s the funniest trip or hangout with {host}?"],
+  ego: ["What’s the best compliment you’d give {host}?","What talent of {host} do you secretly admire?","What makes {host} unforgettable?"],
+  challenge: ["If {host} gave you $50, what dare would you give them?","What challenge should {host} try for 24 hours?","If {host} had to prank someone, who should it be?"],
+  future: ["If {host} became famous, what would it be for?","Where do you see {host} in 10 years?","If {host} started a business, what would they sell?"],
+  relationship: ["Who do you think {host} had their first crush on?","Would you set up {host} on a blind date?","What type of partner fits {host} best?"],
+  mystery: ["If {host} had a secret life, what would it be?","What do you think {host} dreams about?","What’s one thing {host} hides really well?"]
+};
+const emojiPool=["😂","👀","🔥","✨","😅","🤯","💡","❤️","🎭","🥳"];
+function pickSmartQuestion(host){
+  const categories=[{type:"curiosity",weight:.2},{type:"humor",weight:.15},{type:"memory",weight:.15},{type:"ego",weight:.1},{type:"challenge",weight:.1},{type:"future",weight:.1},{type:"relationship",weight:.1},{type:"mystery",weight:.1}];
+  let r=Math.random(), chosen=categories.find(c=>(r-=c.weight)<0).type;
+  const q=questionBank[chosen][Math.floor(Math.random()*questionBank[chosen].length)];
+  return q.replace(/{host}/g,host)+" "+emojiPool[Math.floor(Math.random()*emojiPool.length)];
+}
+
+/* =========== Helpers =========== */
+function showToast(msg,timeout=2200){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  setTimeout(()=>t.style.display="none",timeout);
+}
+function getQueryParam(name){ return new URL(location.href).searchParams.get(name); }
+function copyShare(){
+  const input=document.getElementById("shareUrl");
+  input.select(); document.execCommand("copy");
+  showToast("Copied to clipboard!");
+}
+
+/* =========== Host Flow =========== */
+function handleSignup(e){
+  e.preventDefault();
+  const hostName=document.getElementById("hostName").value.trim();
+  if(!hostName){alert("Enter your name");return}
+  const url=location.origin+location.pathname+"?host="+encodeURIComponent(hostName);
+  document.getElementById("shareUrl").value=url;
+  document.getElementById("shareBox").style.display="flex";
+  document.getElementById("viewAnswersBox").style.display="block";
+  localStorage.setItem("lastHost",hostName);
+  showToast("Link ready — share on WhatsApp!");
+}
+
+/* =========== Visitor Flow =========== */
+function submitAnswer(e){
+  e.preventDefault();
+  const ans=document.getElementById("answerInput").value.trim();
+  if(!ans){alert("Please enter an answer");return}
+  const host=getQueryParam("host");
+  const rec={id:"ans-"+Date.now().toString(36),host,answer:ans,ts:new Date().toLocaleString()};
+  const answers=JSON.parse(localStorage.getItem("answers_v1")||"[]"); answers.push(rec);
+  localStorage.setItem("answers_v1",JSON.stringify(answers));
+  showToast("Thanks! Your answer was recorded."); document.getElementById("answerInput").value="";
+}
+
+/* =========== Admin Answers =========== */
+function openAnswers(){
+  const host=localStorage.getItem("lastHost");
+  if(!host){alert("No host found");return}
+  const answers=JSON.parse(localStorage.getItem("answers_v1")||"[]").filter(a=>a.host===host);
+  document.getElementById("modalHost").textContent=host;
+  document.getElementById("answersList").innerHTML=answers.length
+    ? answers.map(a=>`<div class="answer-item"><strong>${a.ts}:</strong> ${a.answer}</div>`).join("")
+    : "<p style='color:#77ff77'>No answers yet.</p>";
+  document.getElementById("modalBackdrop").style.display="flex";
+}
+function closeAnswers(){ document.getElementById("modalBackdrop").style.display="none"; }
+
+/* =========== On Load =========== */
+addEventListener("load",()=>{
+  const host=getQueryParam("host");
+  if(host){
+    document.getElementById("hostBox").style.display="none";
+    document.getElementById("questionBox").style.display="block";
+    document.getElementById("questionTitle").textContent=pickSmartQuestion(decodeURIComponent(host));
+  } else if(localStorage.getItem("lastHost")){
+    document.getElementById("viewAnswersBox").style.display="block";
+  }
+});
+</script>
+</body>
+</html>
